@@ -1368,7 +1368,7 @@ def login_user(request, error=""):  # pylint: disable=too-many-statements,unused
             user = pipeline.get_authenticated_user(requested_provider, username, third_party_uid)
             third_party_auth_successful = True
         except User.DoesNotExist:
-            AUDIT_LOG.warning(
+            AUDIT_LOG.info(
                 u"Login failed - user with username {username} has no social auth "
                 "with backend_name {backend_name}".format(
                     username=username, backend_name=backend_name)
@@ -1395,9 +1395,10 @@ def login_user(request, error=""):  # pylint: disable=too-many-statements,unused
             ).format(
                 platform_name=platform_name
             )
-
-            return HttpResponse(message, content_type="text/plain", status=403)
-
+            return JsonResponse({
+                "success": False,
+                "value": message,
+            })  # TODO: this should be status code 403  # pylint: disable=fixme
     else:
 
         if 'email' not in request.POST or 'password' not in request.POST:
