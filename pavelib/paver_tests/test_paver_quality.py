@@ -331,6 +331,19 @@ class TestPaverRunQuality(unittest.TestCase):
         self.assertEqual(self._mock_paver_sh.call_count, 2)
 
     @patch('__builtin__.open', mock_open())
+    def test_failure_on_diffquality_stylelint(self):
+        """
+        Verify that the quality task fails with Stylelint violations.
+        """
+        # Mock _get_pep8_violations to return a violation
+        _mock_stylelint_violations = MagicMock(return_value=99)
+        with patch('pavelib.quality._get_stylelint_violations', _mock_stylelint_violations):
+            with self.assertRaises(SystemExit):
+                pavelib.quality.run_quality("")
+
+        self.assertEqual(_mock_stylelint_violations.call_count, 1)
+
+    @patch('__builtin__.open', mock_open())
     def test_other_exception(self):
         """
         If diff-quality fails for an unknown reason on the first run (pep8), then
@@ -347,8 +360,10 @@ class TestPaverRunQuality(unittest.TestCase):
     def test_no_diff_quality_failures(self):
         # Assert nothing is raised
         _mock_pep8_violations = MagicMock(return_value=(0, []))
+        _mock_stylelint_violations = MagicMock(return_value=0)
         with patch('pavelib.quality._get_pep8_violations', _mock_pep8_violations):
-            pavelib.quality.run_quality("")
+            with patch('pavelib.quality._get_stylelint_violations', _mock_stylelint_violations):
+                pavelib.quality.run_quality("")
         # Assert that _get_pep8_violations (which calls "pep8") is called once
         self.assertEqual(_mock_pep8_violations.call_count, 1)
         # And assert that sh was called twice (for the call to "pylint" & "eslint")

@@ -191,7 +191,7 @@ def _get_pep8_violations():
         "{report_dir}/pep8.report".format(report_dir=report_dir)
     )
 
-    return (count, violations_list)
+    return count, violations_list
 
 
 def _pep8_violations(report_file):
@@ -317,22 +317,13 @@ def run_eslint(options):
         )
 
 
-@task
-@needs('pavelib.prereqs.install_node_prereqs')
-@cmdopts([
-    ("limit=", "l", "limit for number of acceptable violations"),
-])
-@timed
-def run_stylelint(options):
+def _get_stylelint_violations():
     """
-    Runs stylelint on Sass files.
-    If limit option is passed, fails build if more violations than the limit are found.
+    Returns the number of Stylelint violations.
     """
-
     stylelint_report_dir = (Env.REPORT_DIR / "stylelint")
     stylelint_report = stylelint_report_dir / "stylelint.report"
     _prepare_report_dir(stylelint_report_dir)
-    violations_limit = int(getattr(options, 'limit', -1))
     formatter = 'node_modules/stylelint-formatter-pretty'
 
     sh(
@@ -344,7 +335,7 @@ def run_stylelint(options):
     )
 
     try:
-        num_violations = int(_get_count_from_last_line(stylelint_report, "eslint"))
+        return int(_get_count_from_last_line(stylelint_report, "eslint"))
     except TypeError:
         raise BuildFailure(
             "Error. Number of eslint violations could not be found in {eslint_report}".format(
@@ -352,11 +343,26 @@ def run_stylelint(options):
             )
         )
 
+
+@task
+@needs('pavelib.prereqs.install_node_prereqs')
+@cmdopts([
+    ("limit=", "l", "limit for number of acceptable violations"),
+])
+@timed
+def run_stylelint(options):
+    """
+    Runs stylelint on Sass files.
+    If limit option is passed, fails build if more violations than the limit are found.
+    """
+    violations_limit = int(getattr(options, 'limit', -1))
+    num_violations = _get_stylelint_violations()
+
     # Record the metric
     _write_metric(num_violations, (Env.METRICS_DIR / "stylelint"))
 
     # Fail if number of violations is greater than the limit
-    if num_violations > violations_limit > -1:
+    if num_violations and num_violations > violations_limit:
         raise BuildFailure(
             "Stylelint Failed. Too many violations ({count}).\nThe limit is {violations_limit}.".format(
                 count=num_violations, violations_limit=violations_limit
@@ -773,7 +779,7 @@ def run_quality(options):
         raise BuildFailure("Diff-quality failure(s).")
 
     # Run Stylelint validation
-    call_task('run_stylelint')
+    call_task('pavelib.quality.run_stylelint')
 
 
 def run_diff_quality(
