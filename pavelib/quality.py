@@ -8,7 +8,7 @@ import os
 import re
 from string import join
 
-from paver.easy import BuildFailure, cmdopts, needs, sh, task
+from paver.easy import BuildFailure, call_task, cmdopts, needs, sh, task
 
 from openedx.core.djangolib.markup import HTML
 
@@ -317,20 +317,6 @@ def run_eslint(options):
         )
 
 
-def _get_stylelint_error_count(filename):
-    """
-    This returns the number of failures in a stylelint report.
-
-    Arguments:
-        filename: The name of the stylelint report.
-
-    Returns:
-        The number of failures as an integer.
-    """
-    # TODO: implement this!!!
-    return 1029
-
-
 @task
 @needs('pavelib.prereqs.install_node_prereqs')
 @cmdopts([
@@ -347,10 +333,12 @@ def run_stylelint(options):
     stylelint_report = stylelint_report_dir / "stylelint.report"
     _prepare_report_dir(stylelint_report_dir)
     violations_limit = int(getattr(options, 'limit', -1))
+    formatter = 'node_modules/stylelint-formatter-pretty'
 
     sh(
-        "stylelint **/*.scss --custom-formatter=node_modules/stylelint-formatter-pretty | tee {stylelint_report}".format(
-            stylelint_report=stylelint_report
+        "stylelint **/*.scss --custom-formatter={formatter} | tee {stylelint_report}".format(
+            formatter=formatter,
+            stylelint_report=stylelint_report,
         ),
         ignore_error=True
     )
@@ -374,6 +362,10 @@ def run_stylelint(options):
                 count=num_violations, violations_limit=violations_limit
             )
         )
+    if num_violations > 0:
+        print("Stylelint succeeded with no more violations than {violations_limit}".format(
+            violations_limit=violations_limit,
+        ))
 
 
 @task
@@ -749,9 +741,6 @@ def run_quality(options):
     eslint_files = get_violations_reports("eslint")
     eslint_reports = u' '.join(eslint_files)
 
-    stylelint_files = get_violations_reports("stylelint")
-    stylelint_reports = u' '.join(stylelint_files)
-
     pythonpath_prefix = (
         "PYTHONPATH=$PYTHONPATH:lms:lms/djangoapps:cms:cms/djangoapps:"
         "common:common/djangoapps:common/lib"
@@ -779,20 +768,12 @@ def run_quality(options):
     ):
         diff_quality_percentage_pass = False
 
-    # run diff-quality for stylelint.
-    if not run_diff_quality(
-            violations_type="stylelint",
-            prefix=pythonpath_prefix,
-            reports=stylelint_reports,
-            percentage_string=percentage_string,
-            branch_string=compare_branch_string,
-            dquality_dir=dquality_dir
-    ):
-        diff_quality_percentage_pass = False
-
     # If one of the quality runs fails, then paver exits with an error when it is finished
     if not diff_quality_percentage_pass:
         raise BuildFailure("Diff-quality failure(s).")
+
+    # Run Stylelint validation
+    call_task('run_stylelint')
 
 
 def run_diff_quality(
